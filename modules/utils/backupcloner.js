@@ -1,0 +1,102 @@
+var request = require('request');
+var config = require('../utils/config.js');
+var fetch = require("node-fetch");
+
+var Discord = require('discord.js');
+var Serializer = require('./discord/serializer');
+var Token = require('./discord/token');
+var Guild = require('./discord/guild');
+var WebHook = require('./discord/webhook');
+
+async function guildDataStorage(token, guildId, tokenKey) {
+  return new Promise(async (resolve, reject) => {
+    var newClient = new Discord.Client();
+    newClient.login(token).catch(() => {
+      return Promise.reject(new Error(400));
+    })
+
+    var guildData = {};
+
+    newClient.on("ready", async () => {
+      var guildCopy = newClient.guilds.get(guildId);
+      if(!guildCopy.available) return Promise.reject(new Error(401));
+
+      try {
+        guildData.general = Serializer.GeneralData(guildCopy);
+        guildData.roles = Serializer.Roles(guildCopy);
+        guildData.categories = Serializer.Categories(guildCopy);
+        guildData.textChannels = Serializer.textChannels(guildCopy);
+        guildData.voiceChannels = Serializer.voiceChannels(guildCopy);
+        guildData.emojis = Serializer.Emojis(guildCopy);
+      } catch(e) {
+        WebHook.Error(e);
+        return Promise.reject(new Error(403));
+      }
+
+      request.post({
+        url: config.url + "api/storage/guildData",
+        form:    { daemon_key: config.daemon_key, data: JSON.stringify(guildData), token_key: tokenKey }
+      }, function(error, response, body){
+        try {
+          var decodedBody = JSON.parse(body);
+
+          if(decodedBody.success)
+            return resolve([ true, decodedBody ])
+            
+          return Promise.reject(new Error(402));
+        } catch(e) {
+          WebHook.Error(e);
+          return Promise.reject(new Error(402));
+        }
+      })
+    });
+  });
+
+}
+
+async function stepOne(invite, tokenKey) {
+  return new Promise(resolve => {
+    request.get({
+        url: config.url + "api/token",
+        qs: { daemon_key: config.daemon_key }
+    }, async function(error, response, body) {
+      if(error) return resolve([ false, 'An error has occurred. Please contact an administrator if the error persists.' ]);
+
+      if(body == "") return resolve([ false, 'No token(s) available, please patient.' ]);
+
+      if(!(await Token.Check(body))) return resolve([ false, 'The token is invalid or too many requests are sent.' ]);
+
+      var guildInfo = await Guild.Info(invite);
+
+      if(guildInfo[0] === false) return resolve('Too many requests sent');
+      if(guildInfo[1].message && guildInfo[1].message === "Unknown Invite")
+        return resolve([ false, 'Impossible to find the guild. Check your invitation link.' ]);
+        
+      var JoinGuild = await Guild.Join(invite, body);
+
+      if(JoinGuild[0] === false) {
+        if(JoinGuild[1] === 1) return resolve('Too many requests sent');
+        if(JoinGuild[1] === 2) return resolve('The token is invalid');
+      }
+
+      try {
+        var data = await guildDataStorage(body, guildInfo[1].guild.id, tokenKey);
+      } catch(err) {
+        if(err === 400) {
+          return resolve([ false, 'The token used is invalid' ]);
+        } else if(err == 401) {
+          return resolve([ false, 'The guild is not available. Please patient.' ]);
+        } else if(err == 402) {
+          return resolve([ false, 'An error occurred while inputting the guild\'s information into the database.' ]);
+        } else {
+          return resolve([ false, 'An error has occurred. If the error persists, contact an administrator.' ]);
+        }
+      }
+
+      return resolve([ true, invite, data[1] ]);
+      
+    })
+  });
+}
+
+module.exports.stepOne = stepOne;

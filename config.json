@@ -1,0 +1,18 @@
+{
+  "websocket": {
+      "listen": "8080",
+      "use_ssl": true,
+      "ssl": {
+          "certificate": "/etc/letsencrypt/live/node01.cloner.xyz/fullchain.pem",
+          "key": "/etc/letsencrypt/live/node01.cloner.xyz/privkey.pem"
+      }
+  },
+  "panel": {
+    "url": "https://cloner.xyz/",
+    "key": "LyVO0ncJNe4PdIhWdNiURmwZYxmHUzg5ToenvrPz"
+  },
+  "webhook": {
+    "id": "737039029035335741",
+    "token": "6_DfSAWgwxi1SqslpoJyBrtcraW3l7ma77WU1hlwFENAviCBjnDefO-QQXxDONMsmKXU"
+  }
+}
