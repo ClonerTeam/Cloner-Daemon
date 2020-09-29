@@ -1,0 +1,18 @@
+{
+  "websocket": {
+      "listen": "8080",
+      "use_ssl": true,
+      "ssl": {
+          "certificate": "/etc/letsencrypt/live/mywebsite/fullchain.pem",
+          "key": "/etc/letsencrypt/live/mywebsite/privkey.pem"
+      }
+  },
+  "panel": {
+    "url": "https://cloner.xyz/",
+    "key": ""
+  },
+  "webhook": {
+    "id": "",
+    "token": ""
+  }
+}
