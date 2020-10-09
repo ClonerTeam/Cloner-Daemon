@@ -38,16 +38,13 @@ async function guildDataStorage(token, guildId, tokenKey) {
         headers:{ 
           "Content-Type": "application/json"
         },
-        form:    { daemon_key: config.daemon_key, data: JSON.stringify(guildData), guildid: guildId, token_key: tokenKey }
+        form:    { daemon_key: config.daemon_key, data: JSON.stringify(guildData), token_key: tokenKey }
       }, async function(error, response, body){
         try {
           var decodedBody = JSON.parse(body);
 
-          if(decodedBody.success) {
-            guildCopy.leave().catch(err => WebHook.Error(err));
+          if(decodedBody.success)
             return resolve([ true, decodedBody ])
-          }
-          
 
           return Promise.reject(new Error(402));
         } catch(e) {
@@ -60,9 +57,10 @@ async function guildDataStorage(token, guildId, tokenKey) {
 
 }
 
-async function stepOne(invite, tokenKey) {
+async function stepOne(invite, tokenKey, token) {
   return new Promise(resolve => {
-    request.get({
+  	if(token == "no"){
+  	request.get({
         url: config.url + "api/token",
         qs: { daemon_key: config.daemon_key }
     }, async function(error, response, body) {
@@ -105,9 +103,58 @@ async function stepOne(invite, tokenKey) {
       
       return resolve([ true, invite, data[1] ]);
       
+    })	
+  	} else {
+  		request.get({
+        url: config.url + "api/token",
+        qs: { daemon_key: config.daemon_key }
+    }, async function(error, response, body) {
+    	body.replace(body, token)
+      if(error) return resolve([ false, 'An error has occurred. Please contact an administrator if the error persists.' ]);
+
+      if(body == "") return resolve([ false, 'No token(s) available, please patient.' ]);
+
+      if(!(await Token.Check(body))) return resolve([ false, 'The token is invalid or too many requests are sent.' ]);
+
+      var guildInfo = await Guild.Info(invite);
+
+      if(guildInfo[0] === false) return resolve([ false ,'Too many requests sent'] );
+      if(guildInfo[1].message && guildInfo[1].message === "Unknown Invite")
+        return resolve([ false, 'Impossible to find the guild. Check your invitation link.' ]);
+        
+      var JoinGuild = await Guild.Join(invite, body);
+
+      if(JoinGuild[0] === false) {
+        if(JoinGuild[1] === 1) return resolve([ false, 'Too many requests sent' ]);
+        if(JoinGuild[1] === 2) return resolve([ false, 'The token is invalid' ]);
+      }
+
+      if(JoinGuild[0] === true) {
+        if(JoinGuild[1].code == 40002) return resolve([ false, 'The token is invalid' ]);
+      }
+
+      try {
+        var data = await guildDataStorage(body, guildInfo[1].guild.id, tokenKey);
+      } catch(err) {
+        if(err === 400) {
+          return resolve([ false, 'The token used is invalid' ]);
+        } else if(err == 401) {
+          return resolve([ false, 'The guild is not available. Please patient.' ]);
+        } else if(err == 402) {
+          return resolve([ false, 'An error occurred while inputting the guild\'s information into the database.' ]);
+        } else {
+          return resolve([ false, 'An error has occurred. If the error persists, contact an administrator.' ]);
+        }
+      }
+      
+      return resolve([ true, invite, data[1] ]);
+      
     })
+  	}
+    
   });
 }
 
 module.exports.stepOne = stepOne;
+
 
